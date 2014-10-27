@@ -1,0 +1,9 @@
+from twisted.internet.defer import succeed
+
+class LandscapeLink(object):
+  def register(self, sysinfo):
+    self._sysinfo = sysinfo
+  def run(self):
+    self._sysinfo.add_footnote(
+      "This is a Graphite server (built with Packer.io)\n    Learn more at http://github.com/ksclarke/packer-graphite")
+    return succeed(None)

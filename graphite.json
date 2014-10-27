@@ -1,0 +1,122 @@
+
+
+{
+  
+  "variables": {
+    
+    "aws_access_key": "{{env `AWS_ACCESS_KEY`}}",
+    "aws_secret_key": "{{env `AWS_SECRET_KEY`}}",
+    "aws_security_group_id": "{{env `AWS_SECURITY_GROUP_ID`}}",
+    "aws_region": "{{env `AWS_REGION`}}",
+    "aws_instance_type": "{{env `AWS_INSTANCE_TYPE`}}",
+    "aws_source_ami": "{{env `AWS_SOURCE_AMI`}}",
+    "default_ssh_user": "{{env `DEFAULT_SSH_USER`}}",
+    "aws_virtualization_type": "{{env `AWS_VIRTUALIZATION_TYPE`}}",
+    "server_admin_email": "{{env `PACKER_GRAPHITE_EMAIL`}}",
+    "packer_build_name": "{{env `PACKER_GRAPHITE_BUILD_NAME`}}",
+    
+    "graphite_admin_password": "",
+    "graphite_secret_key_password": ""
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "access_key": "{{user `aws_access_key`}}",
+    "secret_key": "{{user `aws_secret_key`}}",
+    
+    "security_group_id": "{{user `aws_security_group_id`}}",
+    "region": "{{user `aws_region`}}",
+    "associate_public_ip_address": "true",
+    
+    "source_ami": "{{user `aws_source_ami`}}",
+    "instance_type": "{{user `aws_instance_type`}}",
+    "ami_virtualization_type": "{{user `aws_virtualization_type`}}",
+    "ssh_username": "{{user `default_ssh_user`}}",
+    "ami_name": "{{user `packer_build_name`}}-graphite-{{timestamp}}",
+    "ami_description": "A Graphite deployment built with Packer.io",
+    "tags": {
+      "OS_Version": "Ubuntu",
+      "Release": "Graphite 0.9.10"
+    }
+  }],
+  "provisioners": [{
+    "type": "shell",
+    "inline": [
+      "sleep 30",
+      
+      "sudo apt-get update -y --fix-missing",
+      
+      "sudo unattended-upgrade",
+      
+      "sudo apt-get install -y nano htop nmap",
+      
+      "sudo apt-get remove -y --purge landscape-client",
+      "sudo rm -f /etc/update-motd.d/51-cloudguest",
+      
+      "sudo truncate -s 0 `sudo find /usr/lib -name landscapelink.py`",
+      "curl -o /tmp/landscapelink.py https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/landscape-hack",
+      "sudo mv /tmp/landscapelink.py `sudo find /usr/lib -name landscapelink.py`",
+      
+      "sudo apt-get install -y apache2-mpm-prefork libapache2-mod-wsgi python-cairo python2.7 python-django python-django-tagging",
+      "sudo apt-get install -y python-memcache python-ldap python-txamqp python-setuptools python-rrdtool python-pip python-simplejson",
+      
+      "sudo pip install https://github.com/graphite-project/ceres/tarball/master",
+      "sudo pip install whisper",
+      "sudo pip install carbon",
+      "sudo pip install graphite-web",
+      "sudo pip install daemonize",
+      
+      "cd /opt/graphite",
+      "sudo chown -R ubuntu:ubuntu *",
+      "cd /opt/graphite/conf",
+      "cp carbon.conf.example carbon.conf",
+      "cp storage-schemas.conf.example storage-schemas.conf",
+      "cp graphite.wsgi.example graphite.wsgi",
+      "cd /opt/graphite/webapp/graphite",
+      "cp local_settings.py.example local_settings.py",
+      
+      
+      
+      "sudo rm /etc/apache2/sites-available/000-default.conf",
+      "curl https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/graphite-apache-config.sh | SERVER_ADMIN_EMAIL=\"{{user `server_admin_email`}}\" bash >/tmp/000-default.conf",
+      "sudo mv /tmp/000-default.conf /etc/apache2/sites-available/000-default.conf",
+      
+      "sudo ln -s /opt/graphite/storage/log/webapp /var/log/graphite",
+      
+      "printf \"\n\nSECRET_KEY = '{{user `graphite_secret_key_password`}}'\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\nLOG_RENDERING_PERFORMANCE = True\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\nLOG_CACHE_PERFORMANCE = True\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\nLOG_METRIC_ACCESS = True\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n\nDATABASES = {\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n  'default': {\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'NAME': '/opt/graphite/storage/graphite.db',\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'ENGINE': 'django.db.backends.sqlite3',\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'USER': 'graphiteAdmin',\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'PASSWORD': '{{user `graphite_admin_password`}}',\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'HOST': '',\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n    'PORT': ''\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n  }\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      "printf \"\n}\" | sudo tee -a /opt/graphite/webapp/graphite/local_settings.py >/dev/null",
+      
+      "cd /opt/graphite/webapp/graphite",
+      "sudo python manage.py syncdb --noinput",
+      "echo \"from django.contrib.auth.models import User; User.objects.create_superuser('graphiteAdmin', '{{user `server_admin_email`}}', '{{user `graphite_admin_password`}}')\" | sudo python manage.py shell",
+      
+      "cd /opt/graphite/storage",
+      "sudo chown -R www-data:www-data .",
+      
+      "sudo sed -i -e 's/from twisted.scripts._twistd_unix import daemonize/import daemonize/' /opt/graphite/lib/carbon/util.py",
+      "find /opt/graphite/webapp/graphite -type f -print0 | xargs -0 sudo sed -i 's/from django.conf.urls.defaults import/from django.conf.urls import/'",
+      
+      "cd /opt/graphite/bin/",
+      "sudo -u www-data python carbon-cache.py start",
+      
+      "sudo service apache2 restart",
+      
+      "curl -o /tmp/carbon-cache https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/carbon-cache-initd",
+      "sudo mv /tmp/carbon-cache /etc/init.d/carbon-cache",
+      "sudo chown root:root /etc/init.d/carbon-cache",
+      "sudo chmod 755 /etc/init.d/carbon-cache",
+      "sudo update-rc.d carbon-cache defaults"
+    ]
+  }]
+}

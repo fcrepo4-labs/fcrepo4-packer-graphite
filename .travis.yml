@@ -1,0 +1,83 @@
+language: python
+
+branches:
+  only:
+    - master
+    - develop
+
+env:
+  matrix:
+   - PACKER_VERSION="0.7.1"
+  global:
+   # Secure variables: AWS_SECRET_KEY, AWS_ACCESS_KEY, AWS_SECURITY_GROUP_ID, AWS_OWNER_ID, AWS_SECURITY_GROUP, AWS_KEYPAIR_NAME (not in the order as below)
+   - secure: "h3RZYIa758G++1qj5GIprArX+sOSSF5ZRaW6kxX0GtIAg2VZ5wGAVRza7HOb8fDbCeOcKmC6irJeQzMP6gQ/ileYdUeYzB+RZjk3frMvl0Wo6Q1OcCdPWcd7bdYfHGT8+/amFPv5TslU3afoAk+HNObowyRoN6IHdvkTe3wxnWo="
+   - secure: "oS1WF0V2iWkrk22fjV/s538qcNmSLBDi0+ZK61dL3DtmZsUGiyBcRSZjRIlzHr9m6tXRfO8JsqURKnfc7l/Fuhk/QrMBoGfFmQIK3DpmV+LGtu87oIki6RXPsxYX4BcA0g2bW1SKtIrWzRLnc9bjsG9PcAKzsG+QseQugoFYVqg="
+   - secure: "js9SACVxzqJPJZL9cJe7gXBt59OrczwgLcRPyxnonCp5Rv8XIzyJ2wwC4+DnxV3OhLVOlN2xOsN+hL0etVQMEyCNESPrMIbVEfaY9c+np6ZAAvztZZO3ZsjE/vRfE5UcPwT8dLv9vqV9G9jXeooAtrpQO1H9pfg7wDCuGfsNdHQ="
+   - secure: "t7yW36zVVaMSyvPZ4EGfn0qLmEdMzT48XDJXzE+pMZdZwn1U/A7ztRdd+YUM707gLpYOCH1Q6XVUlvtzzFjwGBD9eaCmY4eonrj07nfrB+aWTozUGAVEPAc5ddHzkg+xwuv2Asn1YFzOmWSVk0iSoK/5nYIBivbrkT7weqbAh5Q="
+   - secure: "z38F9r0k0CxiitJPz5CBBf3Vbqq2Q7fYhzErOvuKANUgV+8G9nbkMQaTjDaaDxIbHVN/U1AjFhozDcmplpv7Fh+hv94EhQCXZFO5scYr3Z6so49KRCp+llnEUm5BApVjRpYlnoEqxOw9bmhoo3kQ6yXkhetWvbfHc38/NaIUZRQ="
+   - secure: "LErjTN/ZQjVl5jQq280ALBvLofw+YLId9iXkyDt45nOkK6inaXTODofcuESSeH1SF9b0IvuLeC9kC33r8eqwUgc+SE9X9VHfLRxyKbhVIl0XUrg7dBQXGdls66ChewihW+NCiLIytORNuZzV+iBehqYYiG6xXDw+ITsoWq/y6e8="
+   - AWS_REGION="us-east-1"
+   - AWS_INSTANCE_TYPE="t2.medium"
+   - AWS_VIRTUALIZATION_TYPE="hvm"
+   - AWS_SOURCE_AMI="ami-0070c468"
+   - DEFAULT_SSH_USER="ubuntu"
+   - PACKER_GRAPHITE_BUILD_NAME="travis-packer"
+   - PACKER_GRAPHITE_EMAIL="thetrashcan@gmail.com"
+
+before_script:
+ # Install Packer, what we're using to create our Graphite server
+ - curl -o /tmp/packer.zip -L "https://dl.bintray.com/mitchellh/packer/packer_${PACKER_VERSION}_linux_amd64.zip"
+ - sudo unzip -d /usr/local/bin /tmp/packer.zip
+ # Add dependencies we use for testing Graphite
+ - sudo pip install awscli
+ - echo "Using AWSvCLI version $(aws --version)"
+ # Create the AWS CLI configuration file
+ - mkdir ~/.aws
+ - printf "[default]\naws_access_key_id = ${AWS_ACCESS_KEY}\naws_secret_access_key = ${AWS_SECRET_KEY}\noutput = text\nregion = ${AWS_REGION}\n" | tee -a ~/.aws/config >/dev/null
+ - chmod 600 ~/.aws/config
+ # Install deps for Diamond, which we use to test posting data to Graphite
+ - sudo apt-get update -y --fix-missing
+ - sudo apt-get install -y libxml2-utils make pbuilder python-mock python-configobj python-support cdbs curl
+ - scripts/install-diamond.sh
+ # Install dependency for our build script below
+ - sudo apt-get -y install npm
+ - npm install --save strip-json-comments
+ # Keep the build script happy by supplying a default config file
+ - cp example-vars.json vars.json
+
+script:
+ # Run the packer build script to create an AMI with Graphite
+ - ./build.sh
+ # Make sure build script completed successfully
+ - if grep -q 'Builds finished but no artifacts were created' packer.log; then exit 1; fi
+ # Start up an EC2 instance from the newly created AWS AMI
+ - echo `awk '{ print $NF }' packer.log | tail -n 1 | tr -d '\n'` | tee ec2.ami
+ - echo `aws ec2 run-instances --image-id $(cat ec2.ami) --security-groups "${AWS_SECURITY_GROUP}" --key-name "${AWS_KEYPAIR_NAME}" --instance-type "${AWS_INSTANCE_TYPE}" --placement "AvailabilityZone=${AWS_REGION}a" | grep INSTANCES | cut -f 8` | tee ec2.instance
+ # Get the remote Graphite IP and start up a local Diamond instance to post to it
+ - for i in {1..300}; do echo `aws ec2 describe-instances --instance-id $(cat ec2.instance) --filters Name=instance-state-name,Values=running | grep INSTANCES | cut -f 15` | tee ec2.ip; if [[ `cat ec2.ip` =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then break; else echo "Waiting for EC2 instance..."; fi; done
+ - sudo sed -i -e "s/host = graphite/host = $(cat ec2.ip)/g" /etc/diamond/diamond.conf
+ - sudo sed -i -e "s/# interval = 300/interval = 10/" /etc/diamond/diamond.conf
+ - sudo service diamond start
+ # Test to confirm that the remote Graphite server is up and receiving data
+ - sleep 90
+ - if [[ $(curl -s "`cat ec2.ip`" | xmllint --html --xpath "//title" -) != "<title>Graphite Browser</title>" ]]; then exit 1; fi
+ - if [[ $(curl -s "`cat ec2.ip`/render?target=servers.*.memory.MemFree&format=csv" | grep -c -) -lt 5 ]]; then exit 1; fi
+ # - if [[ $(curl -s "`cat ec2.ip`/render?target=carbon.agents.*.cpuUsage&format=csv" | grep -c -) -lt 5 ]]; then exit 1; fi
+
+after_success:
+ - scripts/cleanup.sh
+
+after_failure:
+ - scripts/cleanup-failure.sh
+
+notifications:
+  email:
+    recipients:
+      - ksclarke@gmail.com
+    on_failure: change
+    on_success: never
+  irc:
+    channels:
+      - irc.freenode.org#freelibrary
+    on_failure: always
+    on_success: always
