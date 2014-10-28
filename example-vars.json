@@ -6,10 +6,9 @@
   "aws_instance_type": "m1.small",
   "aws_source_ami": "ami-0870c460",
   "aws_virtualization_type": "pv",
-  "default_ssh_user": "ubuntu",
 
   "server_admin_email": "",
-  "packer_build_name": "",
+  "packer_build_name": "fcrepo4",
 
   "graphite_admin_password": "",
   "graphite_secret_key_password": ""

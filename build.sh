@@ -33,7 +33,7 @@ function build_graphite {
     if [ ! -z "$LINE" ]; then
       REPLACEMENT="_password\": \"`openssl rand -base64 12`\""
 
-      if [[ ! -e .passwords_generated ]]; then
+      if [[ ! -e .passwords ]]; then
         PASSWORD_PATTERN="_password\": \"\""
       else
         PASSWORD_PATTERN="_password\": \"*\""
@@ -42,7 +42,7 @@ function build_graphite {
       NEWLINE="${LINE/$PASSWORD_PATTERN/$REPLACEMENT}"
 
       if [ "$NEWLINE" != "$LINE" ]; then
-        touch .passwords_generated
+        touch .passwords
       fi
 
       echo $NEWLINE

@@ -6,7 +6,7 @@
   in this directory.  That file is the same as this one, sans comments.
 
   If you want to run the build, but don't have the strip-json-comments
-  program installed, you should build it using the islandora.json file.
+  program installed, you should build it using the graphite.json file.
 
   Author: Kevin S. Clarke <ksclarke@gmail.com>
 
@@ -15,6 +15,7 @@
 {
   /* These variables should be defined in the vars.json file */
   "variables": {
+    "graphite_version": "0.9.10",
     /* Below are variables supplied by your vars.json file */
     "aws_access_key": "{{env `AWS_ACCESS_KEY`}}",
     "aws_secret_key": "{{env `AWS_SECRET_KEY`}}",
@@ -22,7 +23,6 @@
     "aws_region": "{{env `AWS_REGION`}}",
     "aws_instance_type": "{{env `AWS_INSTANCE_TYPE`}}",
     "aws_source_ami": "{{env `AWS_SOURCE_AMI`}}",
-    "default_ssh_user": "{{env `DEFAULT_SSH_USER`}}",
     "aws_virtualization_type": "{{env `AWS_VIRTUALIZATION_TYPE`}}",
     "server_admin_email": "{{env `PACKER_GRAPHITE_EMAIL`}}",
     "packer_build_name": "{{env `PACKER_GRAPHITE_BUILD_NAME`}}",
@@ -42,12 +42,12 @@
     "source_ami": "{{user `aws_source_ami`}}",
     "instance_type": "{{user `aws_instance_type`}}",
     "ami_virtualization_type": "{{user `aws_virtualization_type`}}",
-    "ssh_username": "{{user `default_ssh_user`}}",
+    "ssh_username": "ubuntu",
     "ami_name": "{{user `packer_build_name`}}-graphite-{{timestamp}}",
     "ami_description": "A Graphite deployment built with Packer.io",
     "tags": {
       "OS_Version": "Ubuntu",
-      "Release": "Graphite 0.9.10"
+      "Release": "Graphite {{user `graphite_version`}}"
     }
   }],
   "provisioners": [{
