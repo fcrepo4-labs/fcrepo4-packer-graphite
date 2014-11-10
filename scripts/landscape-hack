@@ -5,5 +5,5 @@ class LandscapeLink(object):
     self._sysinfo = sysinfo
   def run(self):
     self._sysinfo.add_footnote(
-      "This is a Graphite server (built with Packer.io)\n    Learn more at http://github.com/ksclarke/packer-graphite")
+      "This is a Graphite server (built with Packer.io)\n    Learn more at http://github.com/fcrepo4-labs/fcrepo4-packer-graphite")
     return succeed(None)

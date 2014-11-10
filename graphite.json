@@ -53,7 +53,7 @@
       "sudo rm -f /etc/update-motd.d/51-cloudguest",
       
       "sudo truncate -s 0 `sudo find /usr/lib -name landscapelink.py`",
-      "curl -o /tmp/landscapelink.py https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/landscape-hack",
+      "curl -o /tmp/landscapelink.py https://raw.githubusercontent.com/fcrepo4-labs/fcrepo4-packer-graphite/master/scripts/landscape-hack",
       "sudo mv /tmp/landscapelink.py `sudo find /usr/lib -name landscapelink.py`",
       
       "sudo apt-get install -y apache2-mpm-prefork libapache2-mod-wsgi python-cairo python2.7 python-django python-django-tagging",
@@ -77,7 +77,7 @@
       
       
       "sudo rm /etc/apache2/sites-available/000-default.conf",
-      "curl https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/graphite-apache-config.sh | SERVER_ADMIN_EMAIL=\"{{user `server_admin_email`}}\" bash >/tmp/000-default.conf",
+      "curl https://raw.githubusercontent.com/fcrepo4-labs/fcrepo4-packer-graphite/master/scripts/graphite-apache-config.sh | SERVER_ADMIN_EMAIL=\"{{user `server_admin_email`}}\" bash >/tmp/000-default.conf",
       "sudo mv /tmp/000-default.conf /etc/apache2/sites-available/000-default.conf",
       
       "sudo ln -s /opt/graphite/storage/log/webapp /var/log/graphite",
@@ -112,7 +112,7 @@
       
       "sudo service apache2 restart",
       
-      "curl -o /tmp/carbon-cache https://raw.githubusercontent.com/ksclarke/packer-graphite/master/scripts/carbon-cache-initd",
+      "curl -o /tmp/carbon-cache https://raw.githubusercontent.com/fcrepo4-labs/fcrepo4-packer-graphite/master/scripts/carbon-cache-initd",
       "sudo mv /tmp/carbon-cache /etc/init.d/carbon-cache",
       "sudo chown root:root /etc/init.d/carbon-cache",
       "sudo chmod 755 /etc/init.d/carbon-cache",
